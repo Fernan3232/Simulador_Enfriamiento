@@ -8,7 +8,7 @@ qué tan bueno es el ajuste (R²).
 Idea clave: linealizar el modelo.
     T(t) = T_amb + (T0 - T_amb) * e^(-k*t)
     T(t) - T_amb = (T0 - T_amb) * e^(-k*t)
-    ln(T(t) - T_amb) = ln(T0 - T_amb) - k*t   <-- esto ya es una recta: y = b + m*t
+    ln(|T(t) - T_amb|) = ln(|T0 - T_amb|) - k*t   <-- y = b + m*t
 
 Con eso, un ajuste lineal simple (mínimos cuadrados) te da la pendiente
 (-k) y el intercepto (ln(T0 - T_amb)).
@@ -32,13 +32,14 @@ def linealizar_datos(t: np.ndarray, T: np.ndarray, T_amb: float) -> np.ndarray:
     """
     Calcula y = ln(T - T_amb) para cada punto.
 
-    Los puntos no finitos o con T <= T_amb se marcan como NaN: no pertenecen
-    al dominio del logaritmo y el ajuste los excluirá.
+    Se usa ln(|T - T_amb|), válido tanto para calentamiento como enfriamiento.
+    En equilibrio exacto la diferencia es cero y se marca como NaN.
     """
     _, temperaturas = _validar_vectores(t, T)
     resultado = np.full(temperaturas.shape, np.nan, dtype=float)
-    validos = np.isfinite(temperaturas) & (temperaturas > T_amb)
-    resultado[validos] = np.log(temperaturas[validos] - T_amb)
+    diferencia = np.abs(temperaturas - T_amb)
+    validos = np.isfinite(temperaturas) & (diferencia > 0)
+    resultado[validos] = np.log(diferencia[validos])
     return resultado
 
 
@@ -70,9 +71,10 @@ def ajustar_modelo(t: np.ndarray, T: np.ndarray, T_amb: float) -> dict:
             "El ajuste no representa enfriamiento: la pendiente no produjo una k positiva."
         )
 
+    signo = 1.0 if np.median(temperaturas[validos] - T_amb) > 0 else -1.0
     return {
         "k": k_estimada,
-        "T0": float(T_amb + np.exp(intercepto)),
+        "T0": float(T_amb + signo * np.exp(intercepto)),
         "pendiente": float(pendiente),
         "intercepto": float(intercepto),
     }
@@ -86,8 +88,8 @@ def calcular_r2(t: np.ndarray, T: np.ndarray, T_amb: float,
         SS_residual = sum((T_real - T_predicha)^2)
         SS_total    = sum((T_real - promedio(T_real))^2)
 
-    Solo se comparan observaciones finitas por encima de T_amb, el mismo
-    dominio usado al linealizar.
+    Solo se comparan observaciones finitas distintas de T_amb, el mismo
+    dominio usado al linealizar. La linealización admite calentamiento y enfriamiento.
     """
     from simulacion import temperatura
 
@@ -95,7 +97,7 @@ def calcular_r2(t: np.ndarray, T: np.ndarray, T_amb: float,
     validos = (
         np.isfinite(tiempos)
         & np.isfinite(temperaturas)
-        & (temperaturas > T_amb)
+        & (np.abs(temperaturas - T_amb) > 0)
     )
     if not np.any(validos):
         raise ValueError("No hay datos válidos para calcular R².")
@@ -123,12 +125,13 @@ def graficar_resultado(t: np.ndarray, T: np.ndarray, T_amb: float,
     """
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
 
     tiempos, temperaturas = _validar_vectores(t, T)
     validos = (
         np.isfinite(tiempos)
         & np.isfinite(temperaturas)
-        & (temperaturas > T_amb)
+        & (np.abs(temperaturas - T_amb) > 0)
     )
     if not np.any(validos):
         raise ValueError("No hay datos válidos para graficar.")
@@ -146,45 +149,64 @@ def graficar_resultado(t: np.ndarray, T: np.ndarray, T_amb: float,
     t_max = max(float(np.max(np.asarray(item["t"], dtype=float))) for item in series)
     tiempos_curva = np.linspace(t_min, t_max if t_max > t_min else t_min + 1, 300)
 
-    figura = Figure(figsize=(7.2, 4.4), dpi=100, facecolor="#f4f7fb")
+    # Una sola vista prioriza la curva T(t), principal para comprender el modelo.
+    fondo_figura = "#172436"
+    fondo_ejes = "#203149"
+    color_texto = "#E8F0F7"
+    color_secundario = "#AFC0D2"
+    color_rejilla = "#3A5069"
+    color_borde = "#4D657F"
+    figura = Figure(figsize=(7.3, 5.0), dpi=100, facecolor=fondo_figura)
+    figura.suptitle("Temperatura y modelo de Newton", color=color_texto,
+                    fontsize=12, fontweight="bold", y=0.985)
     ejes = figura.add_subplot(111)
-    colores = ("#db5b4c", "#2878b5", "#4b9b69", "#9a68b5", "#d08b32")
-    resumen = []
+    colores = ("#56CFE1", "#FFB25B", "#91E08B", "#C69CFF", "#FF7B89")
+    etiquetas_leyenda = []
     for indice, item in enumerate(series):
         datos_t, datos_T = _validar_vectores(item["t"], item["T"])
         mascara = (
             np.isfinite(datos_t)
             & np.isfinite(datos_T)
-            & (datos_T > item["T_amb"])
+            & (np.abs(datos_T - item["T_amb"]) > 0)
         )
         if not np.any(mascara):
             continue
         ajuste = item["resultado"]
         color = colores[indice % len(colores)]
         etiqueta = item.get("etiqueta", f"Corrida {indice + 1}")
-        ejes.scatter(datos_t[mascara], datos_T[mascara], color=color, s=25,
-                     alpha=0.8, label=f"{etiqueta}: datos")
+        etiquetas_leyenda.append(Line2D(
+            [0], [0], color=color, marker="o", markersize=4,
+            linewidth=1.8, label=etiqueta,
+        ))
+        ejes.scatter(datos_t[mascara], datos_T[mascara], color=color, s=18,
+                     edgecolors=fondo_ejes, linewidths=0.6, alpha=0.95, zorder=3)
+        ejes.axhline(item["T_amb"], color=color, linestyle=(0, (4, 3)), linewidth=0.9,
+                     alpha=0.65)
         curva = item["T_amb"] + (ajuste["T0"] - item["T_amb"]) * np.exp(
             -ajuste["k"] * tiempos_curva
         )
-        ejes.plot(tiempos_curva, curva, color=color, linewidth=2,
-                  label=f"{etiqueta}: k={ajuste['k']:.4f}")
-        resumen.append(
-            f"{etiqueta}: k={ajuste['k']:.5f} 1/s, "
-            f"T0={ajuste['T0']:.2f} °C, R²={item.get('r2', r2):.4f}"
-        )
+        ejes.plot(tiempos_curva, curva, color=color, linewidth=1.8, zorder=2)
 
-    # El cuadro resume cada ajuste para comparar parámetros sin salir de la gráfica.
-    ejes.text(
-        0.02, 0.98, "\n".join(resumen),
-        transform=ejes.transAxes, va="top", fontsize=8,
-        bbox={"facecolor": "white", "alpha": 0.88, "edgecolor": "#9aa8b7"},
-    )
-    ejes.set_xlabel("Tiempo (s)")
     ejes.set_ylabel("Temperatura (°C)")
-    ejes.set_title("Ley de Enfriamiento de Newton")
-    ejes.grid(True, alpha=0.25)
-    ejes.legend(loc="best", fontsize=8)
-    figura.tight_layout()
+    ejes.set_xlabel("Tiempo (s)")
+    ejes.set_title(
+        "Puntos: mediciones  ·  curva: ajuste del modelo  ·  trazo discontinuo: T ambiente",
+        loc="left", color=color_texto, fontsize=8, pad=7,
+    )
+    ejes.grid(True, color=color_rejilla, alpha=0.8, linewidth=0.55)
+    ejes.set_facecolor(fondo_ejes)
+    ejes.tick_params(axis="both", colors=color_secundario, labelsize=8, length=3)
+    ejes.xaxis.label.set_color(color_texto)
+    ejes.yaxis.label.set_color(color_texto)
+    ejes.xaxis.label.set_size(8.5)
+    ejes.yaxis.label.set_size(8.5)
+    for borde in ejes.spines.values():
+        borde.set_color(color_borde)
+        borde.set_linewidth(0.7)
+
+    ejes.legend(handles=etiquetas_leyenda, loc="upper right", frameon=True,
+                facecolor=fondo_figura, edgecolor=color_borde, framealpha=0.92,
+                fontsize=7.5, labelcolor=color_secundario, handlelength=1.8)
+    figura.subplots_adjust(left=0.12, right=0.97, top=0.91, bottom=0.12)
     FigureCanvasAgg(figura).draw()
     return figura

@@ -9,6 +9,16 @@ antes de meterlo al juego.
 import numpy as np
 
 
+def calcular_k(h: float, area: float, masa: float, calor_especifico: float) -> float:
+    """Calcula k = hA/(mc), con unidades SI para obtener 1/s."""
+    valores = (h, area, masa, calor_especifico)
+    if not all(np.isfinite(valor) for valor in valores):
+        raise ValueError("h, área, masa y calor específico deben ser finitos.")
+    if any(valor <= 0 for valor in valores):
+        raise ValueError("h, área, masa y calor específico deben ser positivos.")
+    return float(h * area / (masa * calor_especifico))
+
+
 def temperatura(t: float, T0: float, T_amb: float, k: float) -> float:
     """
     Ley de Enfriamiento de Newton, solución analítica:

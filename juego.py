@@ -20,6 +20,10 @@ VELOCIDAD_INICIAL = 5.0
 INTERVALO_MUESTRA = 2.0
 FONDO = (20, 28, 42)
 PANEL = (30, 41, 59)
+BORDE = (58, 77, 101)
+ACENTO = (75, 190, 210)
+AMBAR = (255, 186, 92)
+SUPERFICIE = (25, 39, 58)
 TEXTO = (238, 243, 250)
 SECUNDARIO = (173, 188, 207)
 AZUL = (51, 121, 174)
@@ -30,6 +34,8 @@ VERDE = (62, 145, 105)
 _FUENTE = None
 _FUENTE_CHICA = None
 _FUENTE_TITULO = None
+_FUENTE_MICRO = None
+_FONDO_CACHE = None
 
 
 class CampoTexto:
@@ -131,9 +137,10 @@ def _texto_ajustado(pantalla, contenido, posicion, ancho, fuente=None, color=TEX
 def _boton(pantalla, rect, texto, mouse, deshabilitado=False, color=AZUL):
     rect = pygame.Rect(rect)
     hover = rect.collidepoint(mouse) and not deshabilitado
-    fondo = (69, 75, 86) if deshabilitado else (AZUL_HOVER if hover else color)
-    pygame.draw.rect(pantalla, fondo, rect, border_radius=9)
-    pygame.draw.rect(pantalla, (116, 143, 170), rect, 1, border_radius=9)
+    fondo = (55, 64, 77) if deshabilitado else (AZUL_HOVER if hover else color)
+    pygame.draw.rect(pantalla, (12, 19, 30), rect.move(0, 3), border_radius=11)
+    pygame.draw.rect(pantalla, fondo, rect, border_radius=11)
+    pygame.draw.rect(pantalla, (135, 177, 199) if hover else (91, 125, 151), rect, 1, border_radius=11)
     fuente = _FUENTE_CHICA
     while fuente.get_height() > 16 and fuente.size(texto)[0] > rect.width - 18:
         fuente = pygame.font.Font(None, fuente.get_height() - 1)
@@ -156,10 +163,40 @@ def _clic(evento, rect):
 
 
 def _marco(pantalla, titulo, subtitulo=None):
-    pantalla.fill(FONDO)
-    _texto(pantalla, titulo, (42, 28), _FUENTE_TITULO)
+    # Fondo con gradiente discreto y una cabecera común que da continuidad a las pantallas.
+    global _FONDO_CACHE
+    if _FONDO_CACHE is None:
+        _FONDO_CACHE = pygame.Surface((ANCHO, ALTO))
+        for y in range(ALTO):
+            proporcion = y / max(1, ALTO - 1)
+            tono = tuple(round(FONDO[i] + ((13, 20, 32)[i] - FONDO[i]) * proporcion) for i in range(3))
+            pygame.draw.line(_FONDO_CACHE, tono, (0, y), (ANCHO, y))
+        for x in range(38, ANCHO, 74):
+            pygame.draw.line(_FONDO_CACHE, (23, 32, 46), (x, 116), (x, ALTO), 1)
+        for y in range(164, ALTO, 74):
+            pygame.draw.line(_FONDO_CACHE, (23, 32, 46), (0, y), (ANCHO, y), 1)
+    pantalla.blit(_FONDO_CACHE, (0, 0))
+    pygame.draw.rect(pantalla, (24, 36, 53), (0, 0, ANCHO, 116))
+    pygame.draw.line(pantalla, BORDE, (34, 115), (ANCHO - 34, 115), 1)
+    pygame.draw.rect(pantalla, ACENTO, (34, 28, 5, 48), border_radius=3)
+    _texto(pantalla, titulo, (52, 25), _FUENTE_TITULO)
+    pygame.draw.circle(pantalla, ACENTO, (ANCHO - 276, 43), 5)
+    _texto(pantalla, "LABORATORIO TÉRMICO", (ANCHO - 260, 30), _FUENTE_CHICA, TEXTO)
+    _texto(pantalla, "LEY DE NEWTON  ·  EQUILIBRIO",
+           (ANCHO - 260, 57), _FUENTE_MICRO, SECUNDARIO)
     if subtitulo:
-        _texto(pantalla, subtitulo, (45, 86), _FUENTE_CHICA, SECUNDARIO)
+        _texto_ajustado(pantalla, subtitulo, (45, 82), ANCHO - 90,
+                        _FUENTE_CHICA, SECUNDARIO, max_lineas=2, alto_linea=22)
+
+
+def _panel(pantalla, rect, acento=None, color=PANEL, radio=12):
+    """Tarjeta elevada con borde sutil y acento opcional."""
+    rect = pygame.Rect(rect)
+    pygame.draw.rect(pantalla, (12, 19, 30), rect.move(0, 4), border_radius=radio)
+    pygame.draw.rect(pantalla, color, rect, border_radius=radio)
+    pygame.draw.rect(pantalla, BORDE, rect, 1, border_radius=radio)
+    if acento:
+        pygame.draw.rect(pantalla, acento, (rect.x, rect.y + 12, 3, rect.height - 24), border_radius=2)
 
 
 def _dibujar_error(pantalla, mensaje):
@@ -172,30 +209,56 @@ def _dibujar_error(pantalla, mensaje):
 
 def iniciar_pygame():
     """Inicializa Pygame y devuelve la ventana junto con su reloj."""
-    global _FUENTE, _FUENTE_CHICA, _FUENTE_TITULO
+    global _FUENTE, _FUENTE_CHICA, _FUENTE_TITULO, _FUENTE_MICRO
     pygame.init()
     pantalla = pygame.display.set_mode((ANCHO, ALTO))
     pygame.display.set_caption("Laboratorio virtual | Ley de Enfriamiento de Newton")
     _FUENTE = pygame.font.Font(None, 32)
     _FUENTE_CHICA = pygame.font.Font(None, 25)
     _FUENTE_TITULO = pygame.font.Font(None, 48)
+    _FUENTE_MICRO = pygame.font.Font(None, 20)
     return pantalla, pygame.time.Clock()
 
 
 def dibujar_menu_principal(pantalla, puntos=0, medallas=None) -> None:
-    _marco(pantalla, "Laboratorio virtual", "Ley de Enfriamiento de Newton")
-    _texto(pantalla, "Explora el modelo, toma mediciones y compara resultados.",
-           (ANCHO // 2, 185), _FUENTE, SECUNDARIO, centro=True)
+    _marco(pantalla, "Laboratorio virtual", "Explora cómo cambia la temperatura y por qué ocurre.")
     mouse = pygame.mouse.get_pos()
-    _boton(pantalla, (300, 280, 270, 94), "Modo Juego", mouse)
-    _boton(pantalla, (610, 280, 270, 94), "Modo Análisis", mouse)
-    _boton(pantalla, (455, 410, 270, 74), "Aprender el cálculo", mouse, color=(86, 112, 91))
-    _texto(pantalla, "Toda la interacción ocurre en esta ventana.",
-           (ANCHO // 2, 520), _FUENTE_CHICA, SECUNDARIO, centro=True)
+    hero = pygame.Rect(54, 142, 1072, 386)
+    _panel(pantalla, hero, acento=ACENTO, color=SUPERFICIE, radio=20)
+    pygame.draw.circle(pantalla, (32, 52, 72), (850, 337), 165)
+    pygame.draw.circle(pantalla, (54, 81, 103), (850, 337), 165, 1)
+    pygame.draw.circle(pantalla, (48, 69, 90), (850, 337), 132, 1)
+    _texto(pantalla, "EXPERIMENTO INTERACTIVO", (92, 174), _FUENTE_CHICA, ACENTO)
+    _texto_ajustado(pantalla, "El calor siempre busca el equilibrio.",
+                    (92, 218), 510, _FUENTE_TITULO, TEXTO,
+                    max_lineas=2, alto_linea=46)
+    _texto_ajustado(pantalla,
+                    "Observa cómo el objeto se acerca a la temperatura ambiente y descubre qué determina la rapidez del cambio.",
+                    (94, 316), 475, _FUENTE_CHICA, SECUNDARIO,
+                    max_lineas=3, alto_linea=25)
+    ecuacion = pygame.Rect(90, 409, 488, 78)
+    pygame.draw.rect(pantalla, (17, 29, 44), ecuacion, border_radius=12)
+    pygame.draw.rect(pantalla, (52, 76, 99), ecuacion, 1, border_radius=12)
+    _texto(pantalla, "MODELO DE NEWTON", (108, 419), _FUENTE_MICRO, AMBAR)
+    _texto(pantalla, "dT/dt = −k(T − T_amb)", (108, 439), _FUENTE, TEXTO)
+    cafe = obtener_escenario("cafe")
+    dibujar_objeto(
+        pantalla, 90.0, cafe, 90.0, "cafe",
+        pygame.time.get_ticks() / 1000.0, centro=(850, 342),
+    )
+
+    _texto(pantalla, "ELIGE CÓMO EXPLORAR", (70, 548), _FUENTE_MICRO, SECUNDARIO)
+    botones_menu = (
+        ((70, 572, 320, 82), "Modo Juego", AZUL),
+        ((430, 572, 320, 82), "Modo Análisis", (79, 105, 133)),
+        ((790, 572, 320, 82), "Aprender el cálculo", (67, 128, 113)),
+    )
+    for rect, label, color in botones_menu:
+        _boton(pantalla, rect, label, mouse, color=color)
     medallas = medallas or {"Oro": 0, "Plata": 0, "Bronce": 0}
-    _texto(pantalla, f"Puntos: {puntos}    Oro {medallas['Oro']}   Plata {medallas['Plata']}   Bronce {medallas['Bronce']}",
-           (ANCHO // 2, 575), _FUENTE_CHICA, (255, 213, 120), centro=True)
-    _texto(pantalla, "Esc: salir", (ANCHO - 130, ALTO - 42), _FUENTE_CHICA, SECUNDARIO)
+    _texto(pantalla, f"PUNTOS  {puntos:04d}    ·    ORO {medallas['Oro']}   PLATA {medallas['Plata']}   BRONCE {medallas['Bronce']}",
+           (72, 688), _FUENTE_CHICA, AMBAR)
+    _texto(pantalla, "ESC  ·  SALIR", (ANCHO - 170, 688), _FUENTE_CHICA, SECUNDARIO)
 
 
 def dibujar_menu_escenarios(pantalla, puntos=0) -> None:
@@ -205,25 +268,27 @@ def dibujar_menu_escenarios(pantalla, puntos=0) -> None:
         escenario = obtener_escenario(clave)
         x, y = 100 + (indice % 2) * 500, 155 + (indice // 2) * 220
         rect = pygame.Rect(x, y, 450, 180)
-        pygame.draw.rect(pantalla, PANEL, rect, border_radius=12)
-        pygame.draw.rect(
-            pantalla, AZUL_HOVER if rect.collidepoint(mouse) else (71, 88, 109),
-            rect, 2, border_radius=12,
-        )
+        _panel(pantalla, rect, acento=escenario["color_calido"])
+        if rect.collidepoint(mouse):
+            pygame.draw.rect(pantalla, AZUL_HOVER, rect, 2, border_radius=12)
         pygame.draw.circle(pantalla, escenario["color_calido"], (x + 51, y + 50), 24)
         _texto(pantalla, nombre, (x + 91, y + 32), _FUENTE)
-        _texto_ajustado(pantalla, escenario["descripcion"], (x + 25, y + 80),
-                        400, _FUENTE_CHICA, SECUNDARIO, max_lineas=2, alto_linea=22)
-        _texto(pantalla, f"T ambiente: {escenario['T_amb']:.1f} °C",
-               (x + 25, y + 128), _FUENTE_CHICA)
-        _texto(pantalla, f"k: {escenario['k_rango'][0]}–{escenario['k_rango'][1]} 1/s",
-               (x + 240, y + 128), _FUENTE_CHICA)
-        _texto(pantalla, f"Objetivo: llegar a {escenario['meta']:.1f} °C",
-               (x + 25, y + 157), _FUENTE_CHICA, (255, 213, 120))
+        _texto_ajustado(pantalla, escenario["descripcion"], (x + 25, y + 73),
+                        400, _FUENTE_CHICA, SECUNDARIO, max_lineas=2, alto_linea=21)
+        badge_amb = pygame.Rect(x + 25, y + 121, 170, 27)
+        badge_k = pygame.Rect(x + 205, y + 121, 215, 27)
+        pygame.draw.rect(pantalla, (20, 31, 46), badge_amb, border_radius=7)
+        pygame.draw.rect(pantalla, (20, 31, 46), badge_k, border_radius=7)
+        _texto(pantalla, f"AMBIENTE  {escenario['T_amb']:.1f} °C",
+               (badge_amb.x + 8, badge_amb.y + 3), _FUENTE_MICRO, TEXTO)
+        _texto(pantalla, f"k  {escenario['k_rango'][0]}–{escenario['k_rango'][1]} 1/s",
+               (badge_k.x + 8, badge_k.y + 3), _FUENTE_MICRO, TEXTO)
+        _texto(pantalla, f"META  {escenario['meta']:.1f} °C",
+               (x + 25, y + 153), _FUENTE_MICRO, AMBAR)
     personalizado = pygame.Rect(300, 590, 580, 70)
-    pygame.draw.rect(pantalla, PANEL, personalizado, border_radius=12)
-    pygame.draw.rect(pantalla, AZUL_HOVER if personalizado.collidepoint(mouse) else (71, 88, 109),
-                     personalizado, 2, border_radius=12)
+    _panel(pantalla, personalizado, acento=ACENTO)
+    if personalizado.collidepoint(mouse):
+        pygame.draw.rect(pantalla, AZUL_HOVER, personalizado, 2, border_radius=12)
     _texto(pantalla, "Crear objeto personalizado", (ANCHO // 2, 610), _FUENTE, TEXTO, centro=True)
     _texto(pantalla, "Define sus temperaturas, constante k y meta", (ANCHO // 2, 640),
            _FUENTE_CHICA, SECUNDARIO, centro=True)
@@ -244,13 +309,18 @@ def color_interpolado(temp: float, T_amb: float, T0: float,
 
 
 def dibujar_objeto(pantalla, temp: float, escenario: dict, T0: float,
-                   clave: str = "cafe", tiempo: float = 0.0) -> None:
+                   clave: str = "cafe", tiempo: float = 0.0,
+                   centro: tuple | None = None) -> None:
     """Dibuja el objeto del escenario y su calor de forma animada."""
+    if T0 < escenario["T_amb"]:
+        color_frio, color_calido = escenario["color_calido"], escenario["color_frio"]
+    else:
+        color_frio, color_calido = escenario["color_frio"], escenario["color_calido"]
     color = color_interpolado(
         temp, escenario["T_amb"], T0,
-        escenario["color_frio"], escenario["color_calido"],
+        color_frio, color_calido,
     )
-    cx, cy = ANCHO // 2, 385
+    cx, cy = centro or (ANCHO // 2, 385)
     proporcion = 0.0 if T0 == escenario["T_amb"] else (
         (temp - escenario["T_amb"]) / (T0 - escenario["T_amb"])
     )
@@ -260,7 +330,7 @@ def dibujar_objeto(pantalla, temp: float, escenario: dict, T0: float,
     halo = pygame.Surface((440, 390), pygame.SRCALPHA)
     pygame.draw.ellipse(halo, (*color, round(12 + 34 * proporcion)), (30, 55, 380, 280))
     pantalla.blit(halo, (cx - 220, cy - 205))
-    pygame.draw.line(pantalla, (67, 82, 101), (cx - 190, 548), (cx + 190, 548), 3)
+    pygame.draw.line(pantalla, (67, 82, 101), (cx - 190, cy + 163), (cx + 190, cy + 163), 3)
     for i in range(3):
         y = cy - 125 - i * 37
         fase = tiempo * (1.4 + i * .15) + i * 2.1
@@ -270,15 +340,30 @@ def dibujar_objeto(pantalla, temp: float, escenario: dict, T0: float,
             pygame.draw.lines(pantalla, (205, 218, 229), False, puntos, max(1, round(1 + proporcion * 2)))
 
     if clave == "cafe":
-        # Taza con asa, bebida y reflejo.
-        pygame.draw.ellipse(pantalla, (9, 14, 23), (cx - 126, cy + 105, 260, 35))
-        pygame.draw.circle(pantalla, (190, 205, 218), (cx + 111, cy + 7), 52, 12)
-        pygame.draw.ellipse(pantalla, color, (cx - 106, cy - 87, 212, 217))
-        pygame.draw.rect(pantalla, color, (cx - 105, cy - 3, 210, 117))
-        pygame.draw.ellipse(pantalla, (235, 239, 241), (cx - 106, cy - 91, 212, 42), 5)
-        bebida = color_interpolado(temp, escenario["T_amb"], T0, (92, 57, 38), (74, 39, 22))
-        pygame.draw.ellipse(pantalla, bebida, (cx - 91, cy - 81, 182, 24))
-        pygame.draw.line(pantalla, (255, 255, 255), (cx - 65, cy - 39), (cx - 48, cy + 55), 5)
+        # Asa detrás del cuerpo: dos elipses crean un hueco limpio y legible.
+        pygame.draw.ellipse(pantalla, (174, 194, 207), (cx + 73, cy - 28, 101, 104))
+        pygame.draw.ellipse(pantalla, FONDO, (cx + 91, cy - 10, 66, 68))
+
+        pygame.draw.ellipse(pantalla, (9, 14, 23), (cx - 130, cy + 104, 260, 34))
+        cuerpo = [
+            (cx - 101, cy - 72), (cx + 101, cy - 72),
+            (cx + 82, cy + 82), (cx + 57, cy + 101),
+            (cx - 57, cy + 101), (cx - 82, cy + 82),
+        ]
+        pygame.draw.polygon(pantalla, color, cuerpo)
+        pygame.draw.ellipse(pantalla, color, (cx - 82, cy + 54, 164, 70))
+        # Brillo lateral suave para dar volumen al recipiente.
+        brillo = pygame.Surface((28, 120), pygame.SRCALPHA)
+        pygame.draw.ellipse(brillo, (255, 255, 255, 74), (0, 0, 28, 120))
+        pantalla.blit(brillo, (cx - 68, cy - 30))
+
+        # Borde cerámico y superficie del café separados por contraste.
+        pygame.draw.ellipse(pantalla, (225, 233, 239), (cx - 106, cy - 82, 212, 38))
+        pygame.draw.ellipse(pantalla, (119, 137, 151), (cx - 95, cy - 76, 190, 25))
+        bebida = color_interpolado(temp, escenario["T_amb"], T0, (113, 70, 43), (70, 37, 23))
+        pygame.draw.ellipse(pantalla, bebida, (cx - 88, cy - 73, 176, 18))
+        pygame.draw.arc(pantalla, (255, 255, 255), (cx - 104, cy - 81, 208, 36), 0.15, 2.95, 3)
+        pygame.draw.line(pantalla, (255, 255, 255), (cx - 61, cy - 35), (cx - 48, cy + 48), 4)
     elif clave == "motor":
         pygame.draw.ellipse(pantalla, (9, 14, 23), (cx - 160, cy + 100, 320, 34))
         bloque = pygame.Rect(cx - 137, cy - 71, 274, 166)
@@ -317,21 +402,61 @@ def dibujar_objeto(pantalla, temp: float, escenario: dict, T0: float,
         pygame.draw.circle(pantalla, (245, 248, 250), (cx, cy - 3), 8)
         pygame.draw.rect(pantalla, (185, 201, 213), (cx - 24, cy - 78, 48, 35), border_radius=8)
 
+    # El flujo sale de un cuerpo más caliente y entra en uno más frío que el ambiente.
+    sale_calor = T0 > escenario["T_amb"]
+    color_flujo = (255, 156, 83) if sale_calor else (89, 195, 230)
+    for lado in (-1, 1):
+        inicio = (cx + lado * (185 if sale_calor else 225), cy + 42)
+        fin = (cx + lado * (225 if sale_calor else 185), cy + 42)
+        pygame.draw.line(pantalla, color_flujo, inicio, fin, 3)
+        dx = fin[0] - inicio[0]
+        direccion = 1 if dx > 0 else -1
+        pygame.draw.line(pantalla, color_flujo, fin, (fin[0] - direccion * 10, fin[1] - 7), 3)
+        pygame.draw.line(pantalla, color_flujo, fin, (fin[0] - direccion * 10, fin[1] + 7), 3)
+
 
 def dibujar_hud(pantalla, t: float, temp: float, rate: float) -> None:
     panel = pygame.Rect(28, 132, 330, 125)
-    pygame.draw.rect(pantalla, PANEL, panel, border_radius=10)
+    _panel(pantalla, panel, acento=ACENTO, radio=10)
     _texto(pantalla, f"Tiempo: {t:7.1f} s", (48, 150), _FUENTE_CHICA)
     _texto(pantalla, f"Temperatura: {temp:6.2f} °C", (48, 186), _FUENTE_CHICA)
     _texto(pantalla, f"dT/dt: {rate: .3f} °C/s", (48, 222), _FUENTE_CHICA)
 
 
+def _dibujar_panel_edo(pantalla, sim, temp, rate):
+    """Conecta la ecuación diferencial con el estado y las muestras actuales."""
+    escenario = sim["escenario"]
+    amb = escenario["T_amb"]
+    delta_temp = temp - amb
+    panel = pygame.Rect(28, 278, 330, 300)
+    _panel(pantalla, panel, acento=(255, 213, 120), radio=10)
+    _texto(pantalla, "LA ECUACIÓN EN ESTE INSTANTE", (44, 292), _FUENTE_CHICA, (255, 213, 120))
+    _texto(pantalla, "dT/dt = −k(T − T_amb)", (44, 324), _FUENTE_CHICA)
+    _texto(pantalla, f"−k·ΔT = −{sim['k']:.3g}·{delta_temp:.3g}",
+           (44, 352), _FUENTE_CHICA, SECUNDARIO)
+    _texto(pantalla, f"Tasa actual: {rate:.4g} °C/s", (44, 379), _FUENTE_CHICA)
+    _texto(pantalla, f"τ = 1/k: {1 / sim['k']:.3g} s",
+           (44, 402), _FUENTE_CHICA, SECUNDARIO)
+    _texto(pantalla, f"t½ = ln(2)/k: {math.log(2) / sim['k']:.3g} s",
+           (44, 424), _FUENTE_CHICA, SECUNDARIO)
+    _texto(pantalla, "Últimas mediciones", (44, 446), _FUENTE_CHICA, (255, 213, 120))
+    encabezados = ((44, "t"), (100, "T (°C)"), (175, "ΔT"), (259, "dT/dt"))
+    for x, texto in encabezados:
+        _texto(pantalla, texto, (x, 468), _FUENTE_CHICA, SECUNDARIO)
+    for fila, (ti, lectura) in enumerate(sim["datos"][-4:]):
+        y = 489 + fila * 22
+        diferencia = lectura - amb
+        columnas = (f"{ti:.0f}", f"{lectura:.1f}", f"{diferencia:.1f}",
+                    f"{-sim['k'] * diferencia:.2f}")
+        for (x, _), valor in zip(encabezados, columnas):
+            _texto(pantalla, valor, (x, y), _FUENTE_CHICA, TEXTO)
+
+
 def _dibujar_progreso(pantalla, temp, escenario, T0, datos, tiempo):
     """Panel visual con termómetro, objetivo ambiente y últimas mediciones."""
     panel = pygame.Rect(858, 238, 292, 300)
-    pygame.draw.rect(pantalla, (25, 37, 54), panel, border_radius=14)
-    pygame.draw.rect(pantalla, (71, 88, 109), panel, 2, border_radius=14)
-    _texto(pantalla, "PROGRESO DEL ENFRIAMIENTO", (878, 257), _FUENTE_CHICA)
+    _panel(pantalla, panel, acento=ACENTO, color=(25, 37, 54), radio=14)
+    _texto(pantalla, "CAMBIO HACIA EL EQUILIBRIO", (878, 257), _FUENTE_CHICA)
     amb, inicial = escenario["T_amb"], T0
     proporcion = 0 if inicial == amb else max(0, min(1, (temp - amb) / (inicial - amb)))
     # Termómetro vertical; el marcador se desplaza desde el inicio hasta el ambiente.
@@ -339,14 +464,17 @@ def _dibujar_progreso(pantalla, temp, escenario, T0, datos, tiempo):
     pygame.draw.line(pantalla, (104, 122, 143), (x, top), (x, bottom), 15)
     pygame.draw.circle(pantalla, (104, 122, 143), (x, bottom + 6), 17)
     y = round(bottom - proporcion * (bottom - top))
-    pygame.draw.line(pantalla, color_interpolado(temp, amb, inicial, (63, 182, 201), (244, 112, 62)), (x, y), (x, bottom), 8)
-    pygame.draw.circle(pantalla, color_interpolado(temp, amb, inicial, (63, 182, 201), (244, 112, 62)), (x, bottom + 6), 12)
+    colores_termometro = ((244, 112, 62), (63, 182, 201)) if inicial < amb else ((63, 182, 201), (244, 112, 62))
+    color_termometro = color_interpolado(temp, amb, inicial, *colores_termometro)
+    pygame.draw.line(pantalla, color_termometro, (x, y), (x, bottom), 8)
+    pygame.draw.circle(pantalla, color_termometro, (x, bottom + 6), 12)
     pygame.draw.line(pantalla, (223, 232, 239), (x + 15, top), (x + 25, top), 2)
     pygame.draw.line(pantalla, (223, 232, 239), (x + 15, bottom), (x + 25, bottom), 2)
-    _texto(pantalla, f"{inicial:.1f}°", (x + 34, top - 10), _FUENTE_CHICA, SECUNDARIO)
-    _texto(pantalla, f"{amb:.1f}° ambiente", (x + 34, bottom - 10), _FUENTE_CHICA, SECUNDARIO)
-    _texto(pantalla, f"{temp:.1f} °C", (x + 34, y - 13), _FUENTE, TEXTO)
-    _texto(pantalla, f"{round((1 - proporcion) * 100)}% del enfriamiento", (878, 489), _FUENTE_CHICA, SECUNDARIO)
+    _texto(pantalla, f"T0 {inicial:.1f}°", (x + 34, top - 10), _FUENTE_CHICA, SECUNDARIO)
+    _texto(pantalla, f"{amb:.1f}° ambiente", (x + 34, bottom - 4), _FUENTE_CHICA, SECUNDARIO)
+    etiqueta_y = max(top + 18, min(bottom - 33, y - 9))
+    _texto(pantalla, f"{temp:.1f} °C", (x + 34, etiqueta_y), _FUENTE_CHICA, TEXTO)
+    _texto(pantalla, f"{round((1 - proporcion) * 100)}% hacia el equilibrio", (878, 499), _FUENTE_CHICA, SECUNDARIO)
     # Trazado en vivo de las muestras ya tomadas.
     gx, gy, gw, gh = 1015, 330, 112, 125
     pygame.draw.rect(pantalla, (15, 23, 35), (gx, gy, gw, gh), border_radius=6)
@@ -360,7 +488,7 @@ def _dibujar_progreso(pantalla, temp, escenario, T0, datos, tiempo):
         pygame.draw.lines(pantalla, (107, 194, 220), False, puntos, 2)
     for punto in puntos:
         pygame.draw.circle(pantalla, (231, 244, 248), punto, 3)
-    _texto(pantalla, "mediciones", (gx + 11, gy + gh + 8), _FUENTE_CHICA, SECUNDARIO)
+    _texto(pantalla, "T(t)", (gx + 8, gy - 24), _FUENTE_CHICA, SECUNDARIO)
 
 
 def _sim_nuevo(escenario, clave):
@@ -370,6 +498,7 @@ def _sim_nuevo(escenario, clave):
         "clave": clave, "escenario": escenario, "T0": T0, "k": k, "k_base": k,
         "t": 0.0, "pausada": True, "velocidad": VELOCIDAD_INICIAL,
         "siguiente_muestra": 0.0, "datos": [], "reto": None,
+        "ruido_std": float(escenario.get("ruido_std", 0.3)),
         "condicion": 0, "completada": False, "puntos": 0, "medalla": None,
     }
 
@@ -378,20 +507,24 @@ def _medir(sim, hasta):
     while sim["siguiente_muestra"] <= hasta:
         instante = sim["siguiente_muestra"]
         lectura = temperatura(instante, sim["T0"], sim["escenario"]["T_amb"], sim["k"])
-        sim["datos"].append((instante, lectura + random.gauss(0, 0.3)))
+        sim["datos"].append((instante, lectura + random.gauss(0, sim["ruido_std"])))
         sim["siguiente_muestra"] += INTERVALO_MUESTRA
 
 
 def _dibujar_simulacion(pantalla, sim, mouse, botones):
     escenario = sim["escenario"]
     _marco(pantalla, escenario["nombre"], escenario["descripcion"])
-    nombres_condicion = " · ".join(item[0] for item in escenario["condiciones"])
-    _texto(pantalla, f"Estrategias disponibles: {nombres_condicion}",
-           (420, 111), _FUENTE_CHICA, SECUNDARIO)
+    pygame.draw.ellipse(pantalla, (23, 35, 51), (372, 222, 436, 326))
+    pygame.draw.ellipse(pantalla, (48, 70, 92), (386, 232, 408, 306), 1)
+    pygame.draw.ellipse(pantalla, (38, 56, 76), (405, 247, 370, 276), 1)
     t = sim["t"]
     temp = temperatura(t, sim["T0"], escenario["T_amb"], sim["k"])
     dibujar_objeto(pantalla, temp, escenario, sim["T0"], sim["clave"], t)
     dibujar_hud(pantalla, t, temp, tasa_cambio(t, sim["T0"], escenario["T_amb"], sim["k"]))
+    _dibujar_panel_edo(
+        pantalla, sim, temp,
+        tasa_cambio(t, sim["T0"], escenario["T_amb"], sim["k"]),
+    )
     _dibujar_progreso(pantalla, temp, escenario, sim["T0"], sim["datos"], t)
     estado = (
         "Elige una condición y pulsa Reanudar" if sim["t"] == 0 and sim["pausada"]
@@ -422,7 +555,8 @@ def _dibujar_simulacion(pantalla, sim, mouse, botones):
         _texto(pantalla, f"{estado_reto}: objetivo {reto['objetivo']:.1f} °C",
                (ANCHO - 350, 185), _FUENTE_CHICA, SECUNDARIO)
     condicion, _ = escenario["condiciones"][sim["condicion"]]
-    _texto(pantalla, f"META: llegar a {escenario['meta']:.1f} °C", (ANCHO // 2, 565),
+    direccion = "enfriamiento" if sim["T0"] > escenario["T_amb"] else "calentamiento"
+    _texto(pantalla, f"META · {direccion}: {escenario['meta']:.1f} °C", (ANCHO // 2, 565),
            _FUENTE_CHICA, (119, 224, 177) if sim["completada"] else (255, 213, 120), centro=True)
     if sim["completada"]:
         _texto(pantalla, f"Meta cumplida · +{sim['puntos']} puntos · Medalla {sim['medalla']}",
@@ -450,16 +584,18 @@ def correr_simulacion(pantalla, reloj, clave_escenario: str, escenario=None) -> 
             sim["t"] += delta * sim["velocidad"]
             _medir(sim, sim["t"])
             temp_actual = temperatura(sim["t"], sim["T0"], sim["escenario"]["T_amb"], sim["k"])
-            if temp_actual <= sim["escenario"]["meta"]:
+            meta_alcanzada = (
+                temp_actual <= sim["escenario"]["meta"]
+                if sim["T0"] > sim["escenario"]["T_amb"]
+                else temp_actual >= sim["escenario"]["meta"]
+            )
+            if meta_alcanzada:
                 if len(sim["datos"]) < 2:
                     tiempo_meta = tiempo_para_alcanzar(
                         sim["escenario"]["meta"], sim["T0"],
                         sim["escenario"]["T_amb"], sim["k"],
                     )
-                    lectura_meta = max(
-                        sim["escenario"]["T_amb"] + 0.001,
-                        sim["escenario"]["meta"] + random.gauss(0, 0.3),
-                    )
+                    lectura_meta = sim["escenario"]["meta"] + random.gauss(0, sim["ruido_std"])
                     sim["datos"].append((tiempo_meta, lectura_meta))
                 sim["completada"] = True
                 sim["pausada"] = True
@@ -598,7 +734,7 @@ def _analizar(t, T, T_amb):
     r2 = analisis.calcular_r2(t, T, T_amb, resultado["k"], resultado["T0"])
     temps = np.asarray(T, dtype=float)
     tiempos = np.asarray(t, dtype=float)
-    validos = np.isfinite(temps) & np.isfinite(tiempos) & (temps > T_amb)
+    validos = np.isfinite(temps) & np.isfinite(tiempos) & (np.abs(temps - T_amb) > 0)
     predichas = T_amb + (resultado["T0"] - T_amb) * np.exp(
         -resultado["k"] * tiempos[validos]
     )
@@ -647,66 +783,113 @@ def _hacer_analisis(t, T, T_amb, etiqueta, comparaciones):
 
 def _dibujar_analisis(pantalla, mouse, campo_amb, campo_datos, error, hay_datos):
     _marco(pantalla, "Laboratorio de análisis", "Ajusta datos del juego o ingresa mediciones experimentales.")
-    _texto(pantalla, "Temperatura ambiente (°C)", (62, 155), _FUENTE_CHICA)
+    _panel(pantalla, pygame.Rect(38, 142, 1104, 425), acento=ACENTO,
+           color=SUPERFICIE, radio=18)
     campo_amb.dibujar(pantalla, "T ambiente (°C)")
-    _texto(pantalla, "Pares tiempo,temperatura — uno por línea", (62, 252), _FUENTE_CHICA)
-    campo_datos.dibujar(pantalla, "Mediciones", "Ejemplo: 0, 90.0")
-    rects = []
-    rects.append(_boton(pantalla, (62, 600, 220, 58), "Analizar datos escritos", mouse))
-    rects.append(_boton(
-        pantalla, (300, 600, 245, 58), "Usar última simulación", mouse,
-        deshabilitado=not hay_datos,
-    ))
-    rects.append(_boton(pantalla, (565, 600, 220, 58), "Limpiar comparaciones", mouse, color=ROJO))
-    rects.append(_boton(pantalla, (805, 600, 180, 58), "Volver al menú", mouse))
-    _texto(pantalla, "Puedes analizar varias corridas y superponer sus curvas.",
-           (62, 690), _FUENTE_CHICA, SECUNDARIO)
-    _dibujar_error(pantalla, error)
-    return rects
-
-
-def _dibujar_personalizado(pantalla, mouse, campos, error):
-    _marco(pantalla, "Crea tu objeto", "El nombre es libre; el modelo usa sus temperaturas y su constante de enfriamiento.")
-    panel = pygame.Rect(75, 145, 1030, 440)
-    pygame.draw.rect(pantalla, PANEL, panel, border_radius=14)
-    pygame.draw.rect(pantalla, (71, 88, 109), panel, 2, border_radius=14)
-    campos[0].dibujar(pantalla, "Nombre o descripción del objeto")
-    campos[1].dibujar(pantalla, "Temperatura inicial T0 (°C)")
-    campos[2].dibujar(pantalla, "Temperatura ambiente (°C)")
-    campos[3].dibujar(pantalla, "Constante k (1/s)")
-    campos[4].dibujar(pantalla, "Meta de temperatura (°C)")
-    _texto_ajustado(
-        pantalla,
-        "Para que sea un enfriamiento, T0 debe ser mayor que el ambiente; la meta debe quedar entre ambos valores y k debe ser positiva.",
-        (130, 510), 920, _FUENTE_CHICA, SECUNDARIO, max_lineas=2, alto_linea=24,
-    )
+    campo_datos.dibujar(pantalla, "Datos experimentales", "Ejemplo: 0, 90.0")
     rects = [
-        _boton(pantalla, (345, 610, 250, 56), "Iniciar simulación", mouse, color=VERDE),
-        _boton(pantalla, (625, 610, 210, 56), "Volver a escenarios", mouse, color=ROJO),
+        _boton(pantalla, (25, 600, 250, 58), "Analizar datos escritos", mouse),
+        _boton(pantalla, (310, 600, 250, 58), "Usar última simulación", mouse,
+               deshabilitado=not hay_datos),
+        _boton(pantalla, (595, 600, 250, 58), "Limpiar comparaciones", mouse, color=ROJO),
+        _boton(pantalla, (880, 600, 250, 58), "Volver al menú", mouse),
     ]
     _dibujar_error(pantalla, error)
     return rects
 
 
-def _escenario_personalizado(campos):
+def _dibujar_personalizado(pantalla, mouse, campos, error, ruido_std,
+                           campo_tau, modo_k_fisico):
+    subtitulo = "Define el objeto y explora cómo cambia su temperatura."
+    _marco(pantalla, "Crea tu objeto", subtitulo)
+    panel = pygame.Rect(75, 145, 1030, 465)
+    _panel(pantalla, panel, acento=ACENTO, radio=14)
+    boton_directa = _boton(pantalla, (330, 155, 235, 42), "Ingresar k", mouse,
+                           color=(86, 112, 91) if not modo_k_fisico else AZUL)
+    boton_fisica = _boton(pantalla, (585, 155, 265, 42), "Calcular k desde τ", mouse,
+                          color=(86, 112, 91) if modo_k_fisico else AZUL)
+    campos[4].rect.topleft = (700, 350) if modo_k_fisico else (140, 455)
+    campos[0].dibujar(pantalla, "Nombre o descripción del objeto")
+    if not modo_k_fisico:
+        campos[1].dibujar(pantalla, "T inicial T0 (°C)")
+        campos[2].dibujar(pantalla, "T ambiente (°C)")
+        campos[3].dibujar(pantalla, "k (1/s)")
+        campos[4].dibujar(pantalla, "Meta (°C)")
+    else:
+        campos[1].dibujar(pantalla, "T inicial T0 (°C)")
+        campos[2].dibujar(pantalla, "T ambiente (°C)")
+        campos[4].dibujar(pantalla, "Meta (°C)")
+        campo_tau.dibujar(pantalla, "Tiempo característico τ (s)")
+        try:
+            tau = float(campo_tau.texto.strip())
+            if not math.isfinite(tau) or tau <= 0:
+                raise ValueError
+            k_calculada = 1 / tau
+            _texto(pantalla, f"k = 1/τ = 1/{tau:g} = {k_calculada:.6g} 1/s",
+                   (430, 480), _FUENTE_CHICA, (119, 224, 177))
+        except ValueError:
+            _texto(pantalla, "τ debe ser un número positivo; k se expresa en 1/s.",
+                   (430, 480), _FUENTE_CHICA, SECUNDARIO)
+    _texto(pantalla, f"Ruido de medición σ: {ruido_std:.1f} °C", (425, 445 if not modo_k_fisico else 515), _FUENTE_CHICA)
+    pista = pygame.Rect(430, 478 if not modo_k_fisico else 548, 540, 8)
+    pygame.draw.rect(pantalla, (82, 101, 123), pista, border_radius=4)
+    avance = (ruido_std / 2.0) * pista.width
+    pygame.draw.rect(pantalla, AZUL_HOVER, (pista.x, pista.y, avance, pista.height), border_radius=4)
+    pygame.draw.circle(pantalla, TEXTO, (round(pista.x + avance), pista.centery), 10)
+    _texto(pantalla, "0 °C", (425, pista.y + 12), _FUENTE_CHICA, SECUNDARIO)
+    _texto(pantalla, "2 °C", (935, pista.y + 12), _FUENTE_CHICA, SECUNDARIO)
+    nota = (
+        "τ resume la rapidez térmica del objeto y su entorno; k = 1/τ."
+        if modo_k_fisico else
+        "Un k mayor significa un cambio térmico más rápido. σ representa el ruido del termómetro."
+    )
+    _texto_ajustado(
+        pantalla, nota, (130, 580), 920, _FUENTE_CHICA, SECUNDARIO,
+        max_lineas=1, alto_linea=20,
+    )
+    rects = [
+        boton_directa, boton_fisica,
+        _boton(pantalla, (330, 625, 250, 56), "Iniciar simulación", mouse, color=VERDE),
+        _boton(pantalla, (610, 625, 240, 56), "Volver a escenarios", mouse, color=ROJO),
+    ]
+    _dibujar_error(pantalla, error)
+    return rects
+
+
+def _escenario_personalizado(campos, ruido_std=0.3, modo_k_fisico=False, campo_tau=None):
     nombre = campos[0].texto.strip()
     if not nombre:
         raise ValueError("Escribe un nombre para el objeto.")
     try:
-        T0, T_amb, k, meta = (float(campo.texto.strip()) for campo in campos[1:])
+        T0, T_amb = (float(campo.texto.strip()) for campo in campos[1:3])
+        meta = float(campos[4].texto.strip())
     except ValueError as excepcion:
-        raise ValueError("Temperaturas, meta y k deben ser números válidos.") from excepcion
+        raise ValueError("Las temperaturas y la meta deben ser números válidos.") from excepcion
+    if modo_k_fisico:
+        try:
+            tau = float(campo_tau.texto.strip())
+        except ValueError as excepcion:
+            raise ValueError("El tiempo característico τ debe ser un número válido.") from excepcion
+        if not math.isfinite(tau) or tau <= 0:
+            raise ValueError("El tiempo característico τ debe ser mayor que cero.")
+        k = 1 / tau
+    else:
+        try:
+            k = float(campos[3].texto.strip())
+        except ValueError as excepcion:
+            raise ValueError("k debe ser un número válido.") from excepcion
     if not all(math.isfinite(valor) for valor in (T0, T_amb, k, meta)):
         raise ValueError("Los valores deben ser números finitos.")
-    if T0 <= T_amb:
-        raise ValueError("T0 debe ser mayor que la temperatura ambiente para representar enfriamiento.")
+    if math.isclose(T0, T_amb):
+        raise ValueError("T0 debe diferir de la temperatura ambiente para iniciar un cambio térmico.")
     if k <= 0:
         raise ValueError("k debe ser mayor que cero.")
-    if not T_amb < meta < T0:
-        raise ValueError("La meta debe quedar entre la temperatura ambiente y T0.")
+    if not min(T0, T_amb) < meta < max(T0, T_amb):
+        raise ValueError("La meta debe quedar entre T0 y la temperatura ambiente, sin incluirlos.")
     return {
         "nombre": nombre, "T0_rango": (T0, T0), "T_amb": T_amb,
         "k_rango": (k, k), "meta": meta,
+        "ruido_std": ruido_std,
         "color_frio": (63, 182, 201), "color_calido": (232, 135, 58),
         "descripcion": "Objeto definido por el usuario.",
         "condiciones": [("Sin intervención", 1.0), ("Ventilador", 1.7), ("Aislante", 0.55)],
@@ -729,18 +912,19 @@ def _dibujar_guia(pantalla, resultado, mouse):
         r2 = float(resultado["r2"])
         etiqueta = resultado["etiqueta"]
 
-    validos = np.isfinite(tiempos) & np.isfinite(temperaturas) & (temperaturas > T_amb)
+    validos = (np.isfinite(tiempos) & np.isfinite(temperaturas)
+               & (np.abs(temperaturas - T_amb) > 0))
     t, T = tiempos[validos], temperaturas[validos]
     deltas = T - T_amb
-    logs = np.log(deltas)
+    logs = np.log(np.abs(deltas))
     predichas = T_amb + (ajuste["T0"] - T_amb) * np.exp(-ajuste["k"] * t)
     residuos = T - predichas
     m, b = ajuste["pendiente"], ajuste["intercepto"]
-    _marco(pantalla, "Cálculo paso a paso", f"{etiqueta} · sigue cómo las mediciones producen k y T0")
+    _marco(pantalla, "Cálculo paso a paso", f"{etiqueta} · calentamiento o enfriamiento · ajuste de k y T0")
 
     panel = pygame.Rect(40, 130, 1100, 62)
-    pygame.draw.rect(pantalla, PANEL, panel, border_radius=10)
-    _texto(pantalla, "1 · Modelo de enfriamiento", (58, 141), _FUENTE_CHICA, SECUNDARIO)
+    _panel(pantalla, panel, acento=ACENTO, radio=10)
+    _texto(pantalla, "1 · Modelo de Newton", (58, 141), _FUENTE_CHICA, SECUNDARIO)
     _texto(pantalla, "T(t) = T_amb + (T0 − T_amb) · e^(−k·t)", (58, 165), _FUENTE, TEXTO)
 
     if len(t):
@@ -752,28 +936,30 @@ def _dibujar_guia(pantalla, resultado, mouse):
         delta_ejemplo = log_ejemplo = temp_ejemplo = tiempo_ejemplo = 0.0
     pasos = [
         ("2 · Restar el ambiente", f"ΔT = T − T_amb\n{temp_ejemplo:.2f} − {T_amb:.2f} = {delta_ejemplo:.3f} °C"),
-        ("3 · Aplicar logaritmo", f"y = ln(ΔT)\nln({delta_ejemplo:.3f}) = {log_ejemplo:.4f}"),
+        ("3 · Aplicar logaritmo", f"y = ln(|ΔT|)\nln({abs(delta_ejemplo):.3f}) = {log_ejemplo:.4f}"),
         ("4 · Ajustar una recta", "y = b + m·t\nla pendiente m representa −k"),
     ]
     for indice, (titulo, detalle) in enumerate(pasos):
         x = 40 + indice * 370
         caja = pygame.Rect(x, 205, 350, 100)
-        pygame.draw.rect(pantalla, PANEL, caja, border_radius=10)
+        _panel(pantalla, caja, acento=(255, 213, 120), radio=10)
         _texto(pantalla, titulo, (x + 16, 218), _FUENTE_CHICA, (255, 213, 120))
         for fila, linea in enumerate(detalle.split("\n")):
             _texto(pantalla, linea, (x + 16, 250 + fila * 25), _FUENTE_CHICA)
 
     caja = pygame.Rect(40, 318, 1100, 80)
-    pygame.draw.rect(pantalla, PANEL, caja, border_radius=10)
+    _panel(pantalla, caja, acento=ACENTO, radio=10)
     _texto(pantalla, f"5 · Recuperar los parámetros  |  m = {m:.6f},  b = {b:.6f}",
            (58, 330), _FUENTE_CHICA, SECUNDARIO)
-    _texto(pantalla, f"k = −m = {ajuste['k']:.6f} 1/s     ·     T0 = T_amb + e^b = {T_amb:.3f} + e^{b:.3f} = {ajuste['T0']:.3f} °C",
-           (58, 358), _FUENTE_CHICA)
+    signo = "+" if ajuste["T0"] >= T_amb else "−"
+    _texto_ajustado(pantalla,
+        f"k = −m = {ajuste['k']:.6f} 1/s · T0 = T_amb {signo} e^b = {ajuste['T0']:.3f} °C",
+        (58, 356), 1050, _FUENTE_CHICA, max_lineas=2, alto_linea=22)
 
     tabla = pygame.Rect(40, 410, 1100, 180)
-    pygame.draw.rect(pantalla, PANEL, tabla, border_radius=10)
+    _panel(pantalla, tabla, radio=10)
     columnas = [(58, "t (s)"), (180, "T medida"), (310, "ΔT"),
-                (440, "ln(ΔT)"), (575, "T modelo"), (740, "Residuo")]
+                (440, "ln(|ΔT|)"), (575, "T modelo"), (740, "Residuo")]
     for x, titulo in columnas:
         _texto(pantalla, titulo, (x, 425), _FUENTE_CHICA, (255, 213, 120))
     for fila, indice in enumerate(range(min(5, len(t)))):
@@ -793,17 +979,62 @@ def _dibujar_guia(pantalla, resultado, mouse):
     else:
         interpretacion = "R² negativo: el ajuste predice peor que usar la temperatura media."
     _texto_ajustado(pantalla,
-        f"Residuos = T medida − T modelo. {interpretacion} El logaritmo solo existe cuando T > T_amb.",
+        f"Residuos = T medida − T modelo. {interpretacion} ln(|T−T_amb|) requiere T distinta del ambiente.",
         (50, 648), ANCHO - 100, _FUENTE_CHICA, SECUNDARIO, max_lineas=2, alto_linea=20)
-    return [_boton(pantalla, (ANCHO // 2 - 110, 704, 220, 46), "Volver", mouse)]
+    return [
+        _boton(pantalla, (ANCHO // 2 - 250, 704, 210, 46), "Volver", mouse),
+        _boton(pantalla, (ANCHO // 2 + 40, 704, 210, 46), "Quiz rápido", mouse, color=(86, 112, 91)),
+    ]
+
+
+_PREGUNTAS_QUIZ = [
+    ("Si duplicas k y mantienes T y T_amb, ¿qué pasa con |dT/dt|?",
+     ["Se duplica", "Se reduce a la mitad", "No cambia"], 0,
+     "dT/dt = −k(T−T_amb). Con la misma diferencia de temperatura, duplicar k duplica la rapidez del cambio."),
+    ("¿Qué ocurre cuando T = T_amb?",
+     ["La tasa es cero", "La temperatura sigue bajando igual", "La tasa es −k"], 0,
+     "La diferencia T−T_amb vale cero, así que dT/dt también. El objeto se aproxima al ambiente de forma asintótica."),
+    ("Si T está por debajo del ambiente, ¿qué signo tiene dT/dt?",
+     ["Negativo: se enfría", "Positivo: se calienta", "Cero siempre"], 1,
+     "T−T_amb es negativo; al multiplicar por −k, la tasa queda positiva. El mismo modelo describe calentamiento hacia el ambiente."),
+]
+
+
+def _dibujar_quiz(pantalla, mouse, indice, seleccion, aciertos):
+    _marco(pantalla, "¿Qué pasaría si...?", "Usa la ecuación para predecir antes de mirar la explicación.")
+    panel = pygame.Rect(100, 145, 980, 485)
+    _panel(pantalla, panel, acento=(255, 213, 120), radio=14)
+    if indice >= len(_PREGUNTAS_QUIZ):
+        _texto(pantalla, f"Resultado: {aciertos} de {len(_PREGUNTAS_QUIZ)} correctas",
+               (ANCHO // 2, 270), _FUENTE_TITULO, centro=True)
+        _texto_ajustado(pantalla, "Revisa las explicaciones en la guía y prueba el cambio de parámetros en una corrida.",
+                        (180, 350), 820, _FUENTE, SECUNDARIO, max_lineas=2, alto_linea=34)
+        return [_boton(pantalla, (ANCHO // 2 - 120, 550, 240, 54), "Volver a la guía", mouse)]
+
+    pregunta, opciones, correcta, explicacion = _PREGUNTAS_QUIZ[indice]
+    _texto(pantalla, f"Pregunta {indice + 1} de {len(_PREGUNTAS_QUIZ)}", (150, 175), _FUENTE_CHICA, (255, 213, 120))
+    _texto_ajustado(pantalla, pregunta, (150, 220), 850, _FUENTE, TEXTO, max_lineas=2, alto_linea=34)
+    if seleccion is None:
+        rects = []
+        for i, opcion in enumerate(opciones):
+            rects.append(_boton(pantalla, (230, 330 + i * 75, 720, 58), opcion, mouse))
+        return rects
+
+    correcto = seleccion == correcta
+    _texto(pantalla, "Correcto" if correcto else f"La respuesta correcta es: {opciones[correcta]}",
+           (150, 350), _FUENTE, (119, 224, 177) if correcto else (255, 170, 150))
+    _texto_ajustado(pantalla, explicacion, (150, 405), 850, _FUENTE_CHICA, SECUNDARIO,
+                    max_lineas=3, alto_linea=28)
+    siguiente = "Ver resultado" if indice == len(_PREGUNTAS_QUIZ) - 1 else "Siguiente"
+    return [_boton(pantalla, (ANCHO // 2 - 110, 550, 220, 54), siguiente, mouse)]
 
 
 def _dibujar_resultados(pantalla, resultado, mouse, scroll):
     _marco(pantalla, "Resultados del análisis", "La gráfica está integrada en esta misma ventana.")
-    grafica = pygame.transform.smoothscale(resultado["figura"], (730, 455))
-    pantalla.blit(grafica, (28, 135))
+    grafica = pygame.transform.smoothscale(resultado["figura"], (730, 500))
+    pantalla.blit(grafica, (28, 130))
     panel = pygame.Rect(780, 132, 370, 470)
-    pygame.draw.rect(pantalla, PANEL, panel, border_radius=10)
+    _panel(pantalla, panel, acento=ACENTO, radio=10)
     ajuste = resultado["resultado"]
     _texto(pantalla, resultado["etiqueta"], (802, 154), _FUENTE)
     _texto(pantalla, f"k estimada: {ajuste['k']:.6f} 1/s", (802, 204), _FUENTE_CHICA)
@@ -818,10 +1049,10 @@ def _dibujar_resultados(pantalla, resultado, mouse, scroll):
     _texto(pantalla, f"Curvas en comparación: {len(resultado['comparaciones'])}",
            (802, 570), _FUENTE_CHICA, SECUNDARIO)
     rects = [
-        _boton(pantalla, (25, 650, 205, 58), "Analizar otra corrida", mouse),
-        _boton(pantalla, (240, 650, 220, 58), "Limpiar comparaciones", mouse, color=ROJO),
-        _boton(pantalla, (470, 650, 300, 58), "Explicar cálculo", mouse, color=(86, 112, 91)),
-        _boton(pantalla, (930, 650, 220, 58), "Volver al menú", mouse),
+        _boton(pantalla, (20, 650, 185, 58), "Analizar otra corrida", mouse),
+        _boton(pantalla, (305, 650, 190, 58), "Limpiar comparaciones", mouse, color=ROJO),
+        _boton(pantalla, (595, 650, 245, 58), "Explicar cálculo", mouse, color=(86, 112, 91)),
+        _boton(pantalla, (940, 650, 220, 58), "Volver al menú", mouse),
     ]
     _texto(pantalla, "↑/↓: recorrer residuos", (795, 620), _FUENTE_CHICA, SECUNDARIO)
     return rects
@@ -839,6 +1070,11 @@ def main():
     scroll_residuos = 0
     puntos_total = 0
     medallas = {"Oro": 0, "Plata": 0, "Bronce": 0}
+    quiz_indice = 0
+    quiz_seleccion = None
+    quiz_aciertos = 0
+    ruido_personalizado = 0.3
+    modo_k_fisico = False
     campo_amb = CampoTexto((62, 190, 230, 42), "22")
     campo_datos = CampoTexto((62, 286, 720, 270), multilinea=True)
     campos_personalizados = [
@@ -848,6 +1084,7 @@ def main():
         CampoTexto((700, 350, 210, 42), "0.04"),
         CampoTexto((140, 455, 210, 42), "60"),
     ]
+    campo_tau = CampoTexto((140, 455, 240, 42), "65")
     pygame.key.start_text_input()
 
     while True:
@@ -857,12 +1094,15 @@ def main():
 
         if pantalla_actual == "menu":
             dibujar_menu_principal(pantalla, puntos_total, medallas)
-            rects = [pygame.Rect(300, 280, 270, 94), pygame.Rect(610, 280, 270, 94),
-                     pygame.Rect(455, 410, 270, 74)]
+            rects = [pygame.Rect(70, 572, 320, 82), pygame.Rect(430, 572, 320, 82),
+                     pygame.Rect(790, 572, 320, 82)]
         elif pantalla_actual == "escenarios":
             dibujar_menu_escenarios(pantalla, puntos_total)
         elif pantalla_actual == "personalizado":
-            rects = _dibujar_personalizado(pantalla, mouse, campos_personalizados, error)
+            rects = _dibujar_personalizado(
+                pantalla, mouse, campos_personalizados, error, ruido_personalizado,
+                campo_tau, modo_k_fisico,
+            )
         elif pantalla_actual == "analisis":
             rects = _dibujar_analisis(
                 pantalla, mouse, campo_amb, campo_datos, error,
@@ -872,6 +1112,8 @@ def main():
             rects = _dibujar_resultados(pantalla, resultado_actual, mouse, scroll_residuos)
         elif pantalla_actual == "guia":
             rects = _dibujar_guia(pantalla, resultado_actual, mouse)
+        elif pantalla_actual == "quiz":
+            rects = _dibujar_quiz(pantalla, mouse, quiz_indice, quiz_seleccion, quiz_aciertos)
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 pygame.quit()
@@ -882,6 +1124,8 @@ def main():
                     return
                 if pantalla_actual == "guia":
                     pantalla_actual = "resultados" if resultado_actual is not None else "menu"
+                elif pantalla_actual == "quiz":
+                    pantalla_actual = "guia"
                 elif pantalla_actual == "personalizado":
                     pantalla_actual = "escenarios"
                 else:
@@ -893,7 +1137,12 @@ def main():
                 campo_amb.manejar_evento(evento)
                 campo_datos.manejar_evento(evento)
             elif pantalla_actual == "personalizado":
-                for campo in campos_personalizados:
+                campos_visibles = (
+                    [campos_personalizados[0], campos_personalizados[1],
+                     campos_personalizados[2], campos_personalizados[4], campo_tau]
+                    if modo_k_fisico else campos_personalizados
+                )
+                for campo in campos_visibles:
                     campo.manejar_evento(evento)
 
             if evento.type == pygame.KEYDOWN:
@@ -936,8 +1185,19 @@ def main():
                         error = ""
                 elif pantalla_actual == "personalizado":
                     if rects[0].collidepoint(evento.pos):
+                        modo_k_fisico = False
+                        campo_tau.activo = False
+                        error = ""
+                    elif rects[1].collidepoint(evento.pos):
+                        modo_k_fisico = True
+                        campos_personalizados[3].activo = False
+                        error = ""
+                    elif rects[2].collidepoint(evento.pos):
                         try:
-                            escenario = _escenario_personalizado(campos_personalizados)
+                            escenario = _escenario_personalizado(
+                                campos_personalizados, ruido_personalizado,
+                                modo_k_fisico, campo_tau,
+                            )
                             partida = correr_simulacion(pantalla, reloj, "personalizado", escenario)
                             datos_juego = partida["datos"]
                             puntos_total += partida["puntos"]
@@ -948,9 +1208,11 @@ def main():
                             error = ""
                         except ValueError as excepcion:
                             error = str(excepcion)
-                    elif rects[1].collidepoint(evento.pos):
+                    elif rects[3].collidepoint(evento.pos):
                         pantalla_actual = "escenarios"
                         error = ""
+                    elif pygame.Rect(420, 462 if not modo_k_fisico else 532, 565, 42).collidepoint(evento.pos):
+                        ruido_personalizado = max(0.0, min(2.0, (evento.pos[0] - 430) / 540 * 2.0))
                 elif pantalla_actual == "analisis":
                     if rects[0].collidepoint(evento.pos):
                         try:
@@ -1010,6 +1272,28 @@ def main():
                 elif pantalla_actual == "guia":
                     if rects and rects[0].collidepoint(evento.pos):
                         pantalla_actual = "resultados" if resultado_actual is not None else "menu"
+                    elif len(rects) > 1 and rects[1].collidepoint(evento.pos):
+                        quiz_indice = 0
+                        quiz_seleccion = None
+                        quiz_aciertos = 0
+                        pantalla_actual = "quiz"
+                elif pantalla_actual == "quiz":
+                    if quiz_indice < len(_PREGUNTAS_QUIZ) and quiz_seleccion is None:
+                        for indice_opcion, rect in enumerate(rects):
+                            if rect.collidepoint(evento.pos):
+                                quiz_seleccion = indice_opcion
+                                if indice_opcion == _PREGUNTAS_QUIZ[quiz_indice][2]:
+                                    quiz_aciertos += 1
+                                break
+                    elif rects and rects[0].collidepoint(evento.pos):
+                        if quiz_indice >= len(_PREGUNTAS_QUIZ):
+                            pantalla_actual = "guia"
+                        elif quiz_indice == len(_PREGUNTAS_QUIZ) - 1:
+                            quiz_indice += 1
+                            quiz_seleccion = None
+                        else:
+                            quiz_indice += 1
+                            quiz_seleccion = None
 
         pygame.display.flip()
 
